@@ -269,11 +269,13 @@ meanflow_rae/
 已知能訓練起來的架構把整條流程走一遍，之後 Stage 3 出問題時才好判斷是環境問題還是模型
 問題。詳細操作步驟見 [`toy_validation/README.md`](toy_validation/README.md)。
 
-- [ ] 選一個已有實作、已知能訓練起來的架構（例如 SD1.5 fine-tune），沿用
+- [x] 選一個已有實作、已知能訓練起來的架構（例如 SD1.5 fine-tune），沿用
       [`references/huggingface-pytorch-xla`](../references/huggingface-pytorch-xla) 既有腳本，
-      跑通 PyTorch/XLA + GSPMD 訓練流程
-- [ ] TPU VM 上設好 HuggingFace 認證（token）、建立目標 repo
-- [ ] 驗證 checkpoint 格式與 model card，確認能正確 push 到 HuggingFace
+      跑通 PyTorch/XLA + GSPMD 訓練流程——`trc-v4-32-uscent2b-on-demand-0` 上實測跑完 50 步
+- [x] TPU VM 上設好 HuggingFace 認證（token）、建立目標 repo
+- [x] 驗證 checkpoint 格式與 model card，確認能正確 push 到 HuggingFace——`verify_upload.py`
+      確認 `kyle0518/sd15-tpu-toy-test` 有完整 `model_index.json`/`README.md`/
+      `unet`/`vae`/`text_encoder` 子資料夾，4 個 worker 皆驗證通過
 
 **已延後**：Spot 被搶佔中斷後從最新 checkpoint 自動接續（訓練端 checkpoint/resume，見
 §10）。這次 toy 驗證改用 on-demand TPU + 只跑 50 步（幾分鐘內結束），直接避開被搶佔的風

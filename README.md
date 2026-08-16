@@ -11,13 +11,13 @@
 
 ## Roadmap
 
-**第 1 步**已經夠用可以往下走（`reconcile.py` 自動監控延後到真的需要無人值守時再做），
-準備進入第 2 步，完整 checklist 見
+**第 2 步**已完成（SD1.5 toy fine-tune 在 TPU 上跑通、成功上傳 HuggingFace 並驗證），準備
+進入第 3 步，完整 checklist 見
 [`meanflow_rae/README.md` §9](meanflow_rae/README.md#9-roadmap)。
 
 1. ✅ 創建 TPU 機器（自動監控延後）
-2. 🚧 在 TPU 上用 toy dataset 訓練已有架構（例如 SD1.5），並確保可以正確上傳 HuggingFace
-3. ⬜ 用 toy dataset 訓練 RAE + MeanFlow
+2. ✅ 在 TPU 上用 toy dataset 訓練已有架構（例如 SD1.5），並確保可以正確上傳 HuggingFace
+3. 🚧 用 toy dataset 訓練 RAE + MeanFlow
 4. ⬜ 創建大型 webdataset
 5. ⬜ 正式訓練 RAE + MeanFlow
 
