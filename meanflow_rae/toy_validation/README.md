@@ -53,8 +53,8 @@ toy dataset、TPU 上跑一輪完整流程，包含把訓練出來的東西**成
   `toy_validation/` 這個資料夾整個傳到 TPU VM 上。如果 Cloud Shell 上還沒有這份 repo，先
   clone/pull 一份（`git clone https://github.com/kyle0518/tpu-image-gen.git`）。
 
-- 把 `<你的HF帳號>`、`<你的HF write token>` 換成你自己的值——下面指令裡會出現，這是唯一
-  需要你自己填的地方。
+- 把 `<你的GCP-project-id>`、`<你的HF帳號>`、`<你的HF write token>` 換成你自己的值——下面
+  指令裡會出現，這是需要你自己填的地方。
 
 ## 步驟
 
@@ -67,7 +67,7 @@ toy dataset、TPU 上跑一輪完整流程，包含把訓練出來的東西**成
 
 ```bash
 export TPU_NAME=trc-v4-32-uscent2b-on-demand-0
-export PROJECT_ID=trc-project-504304
+export PROJECT_ID=<你的GCP-project-id>
 export ZONE=us-central2-b
 ```
 
