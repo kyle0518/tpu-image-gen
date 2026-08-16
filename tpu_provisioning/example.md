@@ -58,21 +58,22 @@ gcloud compute tpus queued-resources create trc-v6e-16-euwest4a-spot-1 --project
 gcloud compute tpus queued-resources create trc-v6e-16-euwest4a-spot-2 --project=my-trc-project --zone=europe-west4-a --node-id=trc-v6e-16-euwest4a-spot-2 --accelerator-type=v6e-16 --runtime-version=v2-alpha-tpuv6e --spot --internal-ips
 gcloud compute tpus queued-resources create trc-v6e-16-euwest4a-spot-3 --project=my-trc-project --zone=europe-west4-a --node-id=trc-v6e-16-euwest4a-spot-3 --accelerator-type=v6e-16 --runtime-version=v2-alpha-tpuv6e --spot --internal-ips
 
-Full check/create/describe/delete command reference written to tpu_provisioning/tpu_commands.md
+Full network-setup/check/create/describe/delete command reference written to tpu_provisioning/tpu_commands.md
 ```
 
 檢查彙總表：每一列「拆分後晶片總數 = 」都要等於後面的「quota:」。這份配額六列全部對得上
 （64=2×32、64=4×16、64=2×32、32=1×32、32=1×32、64=4×16），代表沒有漏算或算錯，可以往下走。
 
-最後一行寫的 `tpu_commands.md` 除了上面這 14 條 create 指令，還有三段：每個 zone 一條的
-`queued-resources list`（Check，只回名稱+狀態，用來快速掃過現況）、每個 slice 一條的
+最後一行寫的 `tpu_commands.md` 除了上面這 14 條 create 指令，還有：每個 region 一條的
+Private Google Access/Cloud NAT 建置指令（Network Setup，一次性網路設定）、每個 zone 一條
+的 `queued-resources list`（Check，只回名稱+狀態，用來快速掃過現況）、每個 slice 一條的
 `queued-resources describe`（Describe，回完整細節，某個 slice 卡住想查原因時用）、以及對應
-每個 slice 名稱的 `queued-resources delete`（要清掉某個 slice 時複製那條指令跑，不用自己重
-組名稱和參數）。Check/Create/Describe/Delete 四段各自放在一個 ` ```bash ` code block 裡，區
-塊內每條指令上面都有 `# slice名稱`（Check 段是 `# zone`）註解分開，掃描起來跟一般 shell 腳
-本一樣好認，在 GitHub 之類的網頁上瀏覽時整個區塊也有自己的複製按鈕。這份檔案是複製用的參
-考，不是拿來整份貼進終端機執行的腳本，四段之間不要整段貼著跑（Create 接著整段跑 Delete 就
-是建了又立刻刪掉）。
+每個 slice 名稱的 `queued-resources delete`（Delete，分 `### Spot` / `### On-demand` 兩個
+子段，要清掉某個 slice 時複製那條指令跑，不用自己重組名稱和參數）。每段各自放在一個
+` ```bash ` code block 裡，區塊內每條指令上面都有 `# slice名稱`（Check/Network Setup 段是
+`# zone`/`# region`）註解分開，掃描起來跟一般 shell 腳本一樣好認，在 GitHub 之類的網頁上瀏
+覽時整個區塊也有自己的複製按鈕。這份檔案是複製用的參考，不是拿來整份貼進終端機執行的腳
+本，各段之間不要整段貼著跑（Create 接著整段跑 Delete 就是建了又立刻刪掉）。
 
 ## 3. 確認沒問題後送出申請
 

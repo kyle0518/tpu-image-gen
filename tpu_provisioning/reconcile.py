@@ -9,13 +9,19 @@ stale queued resource deleted and a fresh one created. Each run:
   1. Computes the desired list of slices from trc_quota.py (same split
      logic plan_tpu_requests.py uses).
   2. Queries the actual queued-resource state per zone via gcloud.
-  3. Missing slices get created.
-  4. Slices present but not in a healthy state get *deleted only* -- the
-     recreate is left to the next run, once gcloud actually reports them
-     gone. Deleting and recreating in the same pass risks racing gcloud's
-     own eventual consistency (delete may not be immediate), so recovery
-     for an unhealthy slice takes up to two cron cycles by design, not by
-     accident.
+  3. Missing slices get created (spot and on-demand alike).
+  4. Spot slices present but not in a healthy state get *deleted only* --
+     the recreate is left to the next run, once gcloud actually reports
+     them gone. Deleting and recreating in the same pass risks racing
+     gcloud's own eventual consistency (delete may not be immediate), so
+     recovery for an unhealthy slice takes up to two cron cycles by
+     design, not by accident.
+  5. On-demand slices present but not in a healthy state are *never*
+     auto-deleted -- on-demand capacity doesn't get preempted the way spot
+     does, so an unhealthy on-demand slice usually means something is
+     actually wrong (not just "waiting for capacity again"), and it's a
+     real paid resource that shouldn't be torn down without a human
+     looking at it first. These get flagged for manual review instead.
 
 Usage (e.g. cron every 5 minutes):
 
@@ -76,23 +82,29 @@ def main() -> None:
     zones = sorted({s["zone"] for s in slices})
     zone_states = {zone: actual_states(zone) for zone in zones}
 
-    to_create, to_delete = [], []
+    to_create, to_delete, needs_review = [], [], []
     for s in slices:
         state = zone_states[s["zone"]].get(s["name"])
+        tier = s["entry"]["tier"]
         if state is None:
             print(f"MISSING   {s['name']} ({s['zone']}) -- will create")
             to_create.append(s)
         elif state not in HEALTHY_STATES:
-            print(f"UNHEALTHY {s['name']} ({s['zone']}) state={state} -- will delete (recreated next run)")
-            to_delete.append(s)
+            if tier == "on-demand":
+                print(f"UNHEALTHY {s['name']} ({s['zone']}) state={state} -- on-demand, NOT auto-deleting; needs manual review")
+                needs_review.append(s)
+            else:
+                print(f"UNHEALTHY {s['name']} ({s['zone']}) state={state} -- will delete (recreated next run)")
+                to_delete.append(s)
         else:
             print(f"OK        {s['name']} ({s['zone']}) state={state}")
 
-    if not to_create and not to_delete:
+    if not to_create and not to_delete and not needs_review:
         print("\nAll slices healthy, nothing to do.")
         return
 
-    print(f"\n{len(to_delete)} to delete, {len(to_create)} to create.")
+    review_note = f", {len(needs_review)} on-demand need manual review" if needs_review else ""
+    print(f"\n{len(to_delete)} to delete, {len(to_create)} to create{review_note}.")
 
     for s in to_delete:
         cmd = build_delete_command(s["name"], s["zone"])

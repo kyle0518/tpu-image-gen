@@ -9,7 +9,7 @@
 | --- | --- |
 | `trc_quota.py` | 設定檔：目前的 TRC 配額清單、spot 拆分規則、runtime version 對照表、zone 縮寫對照表（`ZONE_ABBREV`，拿來組 slice 名稱）；`PROJECT_ID`/`GCLOUD_ACCOUNT` 從環境變數讀，不寫在檔案裡 |
 | `plan_tpu_requests.py` | 讀 `trc_quota.py`，印出（或用 `--run` 執行）`gcloud queued-resources create` 指令，並把 network setup（Private Google Access/Cloud NAT）/check/create/describe/delete 指令寫到 `tpu_commands.md`（各自一個 code block，用 `#` 註解分開每條） |
-| `reconcile.py` | 單次比對「應該存在的 slice」vs. 實際狀態，缺的補建、壞的刪除；搭配 cron/systemd 定期執行 |
+| `reconcile.py` | 單次比對「應該存在的 slice」vs. 實際狀態，缺的補建、壞的刪除（spot 才會自動刪，on-demand 只標記需人工檢查）；搭配 cron/systemd 定期執行 |
 
 ## 使用前
 
@@ -60,7 +60,9 @@ Slice（Queued Resource）名稱格式是 `trc-{generation}-{每請求chips}-{zo
 - **Create**：跟之前一樣
 - **Describe**：`queued-resources describe`，每個 slice 一條，回完整細節——某個 slice 卡在
   `WAITING_FOR_RESOURCES` 很久、想知道實際原因時，list 的兩個欄位不夠看，要用這個
-- **Delete**：跟之前一樣
+- **Delete**：分 `### Spot` / `### On-demand` 兩個子段，不混在一起——spot 被搶佔後刪除重建
+  是常態操作，on-demand 不會被搶佔，正常情況下不需要刪，分開避免手滑把 on-demand 的刪除指
+  令跟著 spot 的一起複製執行
 
 指令本身經過 shell-quote（例如 `--format=value(name,state)` 會印成
 `'--format=value(name,state)'`），複製後可以直接貼到 Cloud Shell 之類的網頁終端機或本機終端
@@ -118,5 +120,10 @@ Slice（Queued Resource）名稱格式是 `trc-{generation}-{每請求chips}-{zo
   （`stateInitiator=SERVICE`，代表 spot 被搶佔，**不會自動恢復**，要刪除重建——`SUSPENDED`
   故意不在 `HEALTHY_STATES` 裡，現有邏輯已經是對的，不用改）。`WAITING_FOR_RESOURCES` 還沒
   實測驗證過，正式排 cron 前建議留意一下。
+- **`reconcile.py` 不會自動刪除 on-demand slice**：狀態不健康時，spot 會照舊「刪除、留給
+  下一輪重建」，但 on-demand 只會印出 `... on-demand, NOT auto-deleting; needs manual
+  review`、加進待檢查清單，不會自動送出 delete 指令。原因是 on-demand 不會被搶佔，不健康
+  通常代表真的出了問題（不是「等容量」這種正常波動），而且是持續計費的資源，不該讓自動化
+  腳本沒人看就砍掉——需要時自己用 `tpu_commands.md` 的 `### On-demand` 段手動處理。
 - 該跑在哪台機器上（獨立常駐控制機 or 某個 TPU VM 自己）尚未定案，見
   [`../meanflow_rae/README.md` §10](../meanflow_rae/README.md#10-開放問題--待決策事項)。

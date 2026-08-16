@@ -263,7 +263,8 @@ def write_command_file(
     check_items: list,
     create_items: list,
     describe_items: list,
-    delete_items: list,
+    delete_spot_items: list,
+    delete_on_demand_items: list,
 ) -> None:
     """Write a Markdown command reference: network setup, check, create, describe, then delete.
 
@@ -272,6 +273,14 @@ def write_command_file(
     the gcloud argv list. This is a reference to copy commands out of, not a
     script meant to be run top-to-bottom -- the delete section targets the
     same slice names the create section makes.
+
+    Delete is split into spot/on-demand subsections rather than one combined
+    list: spot slices get deleted+recreated routinely (that's the whole
+    point of reconcile.py -- spot capacity gets preempted), but on-demand
+    slices don't get preempted and aren't meant to be torn down as part of
+    that routine. Keeping them in a visibly separate section makes it harder
+    to absent-mindedly copy an on-demand delete command along with a batch
+    of spot ones.
     """
     lines = [
         "# TPU provisioning commands",
@@ -321,7 +330,19 @@ def write_command_file(
         "",
         "Remove a slice created above.",
         "",
-        *_command_block(delete_items),
+        "### Spot",
+        "",
+        "Spot slices get preempted routinely -- deleting and letting the next "
+        "create/reconcile pass rebuild them is normal, expected operation.",
+        "",
+        *_command_block(delete_spot_items),
+        "### On-demand",
+        "",
+        "On-demand slices don't get preempted, so there's normally no reason "
+        "to delete one as part of routine cleanup -- these commands are here "
+        "for when you deliberately want to tear one down, not for regular use.",
+        "",
+        *_command_block(delete_on_demand_items),
     ]
     Path(path).write_text("\n".join(lines))
 
@@ -349,13 +370,13 @@ def main() -> None:
 
     print("# Plan summary: zone / generation / tier -> num_requests x chips_per_request (quota)")
     all_commands = []
-    all_slices = []  # (name, zone) for every slice, used to build delete commands
+    all_slices = []  # (name, zone, tier) for every slice, used to build delete commands
     for entry, requests, commands, names in plan:
         n = len(requests)
         per = requests[0]["chips"]
         print(f"#   {entry['zone']:<16} {entry['generation']:<4} {entry['tier']:<10} " f"{n} x {per:<3} = {n * per:<4} (quota: {entry['chips']})")
         all_commands.extend(commands)
-        all_slices.extend((name, req["zone"]) for name, req in zip(names, requests))
+        all_slices.extend((name, req["zone"], req["tier"]) for name, req in zip(names, requests))
     print()
 
     for cmd in all_commands:
@@ -369,10 +390,13 @@ def main() -> None:
         nat_items.append((region, build_nat_router_command(region)))
         nat_items.append((region, build_nat_gateway_command(region)))
     check_items = [(zone, build_list_command(zone)) for zone in zones]
-    create_items = list(zip((name for name, _ in all_slices), all_commands))
-    describe_items = [(name, build_describe_command(name, zone)) for name, zone in all_slices]
-    delete_items = [(name, build_delete_command(name, zone)) for name, zone in all_slices]
-    write_command_file(args.output, pga_items, nat_items, check_items, create_items, describe_items, delete_items)
+    create_items = list(zip((name for name, _, _ in all_slices), all_commands))
+    describe_items = [(name, build_describe_command(name, zone)) for name, zone, _ in all_slices]
+    delete_spot_items = [(name, build_delete_command(name, zone)) for name, zone, tier in all_slices if tier == "spot"]
+    delete_on_demand_items = [(name, build_delete_command(name, zone)) for name, zone, tier in all_slices if tier == "on-demand"]
+    write_command_file(
+        args.output, pga_items, nat_items, check_items, create_items, describe_items, delete_spot_items, delete_on_demand_items
+    )
     print(f"\nFull network-setup/check/create/describe/delete command reference written to {args.output}")
 
     if not args.run:
