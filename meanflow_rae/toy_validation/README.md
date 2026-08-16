@@ -35,6 +35,7 @@
   用 spot 中途被搶佔會導致進度歸零，第一次跑建議先用 on-demand 排除這個風險。
 - HuggingFace 帳號，並在 https://huggingface.co/settings/tokens 生一個 **write 權限**的
   token（需要能建立 repo、上傳檔案）。
+- （選用）Weights & Biases 帳號，用來即時追蹤訓練 loss 曲線，見第 5 步。
 - 把下面指令裡的 `<你的GCP-project-id>`、`<你的HF帳號>`、`<你的HF write token>` 換成自己的值。
 
 ## 步驟
@@ -118,7 +119,27 @@ gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
 裝在 `~/.local/bin`，非互動式 SSH session 預設不會把這個路徑加進 `PATH`。直接呼叫
 `huggingface_hub` 套件的 `login()` 函式（`hf auth login` 底層也是包這個函式）不依賴 `PATH`。
 
-### 5. 執行訓練，並上傳到 HuggingFace
+### 5. 設定 Weights & Biases（訓練過程紀錄）
+
+在 https://wandb.ai/authorize 取得 API key，然後：
+
+```bash
+export WANDB_API_KEY=<你的W&B API key>
+
+gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
+  --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
+  --command="WANDB_API_KEY=${WANDB_API_KEY} python3 -c \"import wandb; wandb.login()\""
+```
+
+`wandb.login()` 會讀取 `WANDB_API_KEY` 環境變數完成認證，效果等同互動式的 `wandb login`，
+但不需要終端機輸入。認證只需要做一次，之後 `wandb.init()`（第 6 步的訓練腳本裡）會自動
+沿用同一組認證。
+
+這一步是選用的：不設定的話，第 6 步不要加 `--report_to=wandb`，訓練腳本就完全不會碰
+`wandb`，行為跟原本一樣。但建議在這個 toy 階段就測過一次，把「W&B 認證能不能過」這種環境
+風險也一併驗證掉，而不是留到第 3 步正式訓練時才第一次踩到。
+
+### 6. 執行訓練，並上傳到 HuggingFace
 
 ```bash
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
@@ -128,20 +149,24 @@ cd ~/tpu-image-gen/meanflow_rae/toy_validation
 export XLA_DISABLE_FUNCTIONALIZATION=0
 export PROFILE_DIR=/tmp/
 export CACHE_DIR=/tmp/
-python3 train_text_to_image_xla.py --pretrained_model_name_or_path=stable-diffusion-v1-5/stable-diffusion-v1-5 --dataset_name=lambdalabs/naruto-blip-captions --resolution=512 --center_crop --random_flip --train_batch_size=32 --max_train_steps=50 --learning_rate=1e-06 --mixed_precision=bf16 --output_dir=/tmp/trained-model/ --dataloader_num_workers=8 --loader_prefetch_size=4 --device_prefetch_size=4 --push_to_hub --hub_model_id=<你的HF帳號>/sd15-tpu-toy-test --print_loss
+python3 train_text_to_image_xla.py --pretrained_model_name_or_path=stable-diffusion-v1-5/stable-diffusion-v1-5 --dataset_name=lambdalabs/naruto-blip-captions --resolution=512 --center_crop --random_flip --train_batch_size=32 --max_train_steps=50 --learning_rate=1e-06 --mixed_precision=bf16 --output_dir=/tmp/trained-model/ --dataloader_num_workers=8 --loader_prefetch_size=4 --device_prefetch_size=4 --push_to_hub --hub_model_id=<你的HF帳號>/sd15-tpu-toy-test --print_loss --report_to=wandb --wandb_project=tpu-image-gen --wandb_run_name=toy-sd15
 '
 ```
 
 - `--max_train_steps=50`：故意設很小，這步只驗證流程通不通，不是要練出可用的模型。
 - `--hub_model_id`：換成自己的 HuggingFace 帳號。
-- `--print_loss`：每一步印出 `Step: X, Loss: Y`，讓指令執行期間看得到進度。會讓每步變慢一點
-  （打斷 XLA 延遲執行的批次優化），50 步的規模可以忽略；訓練規模變大（第 3、5 步）時建議
-  拿掉，改用低頻率的進度回報方式。
+- `--print_loss`：每一步印出 `Step: X, Loss: Y` 到 Cloud Shell，讓指令執行期間看得到進度。
+- `--report_to=wandb`：把 loss/learning rate 每 `--logging_steps`（預設 10）步記錄一次到
+  W&B，可以在 https://wandb.ai 上即時看曲線，SSH session 斷掉之後歷史紀錄也還在。沒跑過第
+  5 步（W&B 認證）的話拿掉這個 flag 即可，訓練照樣正常執行。
+- 兩者都是透過 `xm.add_step_closure()` 延遲讀取數值，避免打斷 XLA 的批次優化；`print_loss`
+  是逐步印、`--logging_steps` 控制 W&B 的記錄頻率，訓練規模變大時只需要調高
+  `--logging_steps`，不需要改程式碼。
 
 `push_to_hub` 只有 master worker（`xm.is_master_ordinal()`）會執行，多 worker 不會重複
 上傳。這條指令會一直卡在 Cloud Shell 直到訓練結束才返回，是正常行為。
 
-### 6. 驗證上傳結果
+### 7. 驗證上傳結果
 
 ```bash
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
@@ -155,7 +180,7 @@ gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
 OK: repo has model_index.json, README.md, and unet/vae/text_encoder subfolders.
 ```
 
-印出 `FAIL` 代表缺了什麼檔案/資料夾，回頭看第 5 步的執行輸出找錯誤訊息。
+印出 `FAIL` 代表缺了什麼檔案/資料夾，回頭看第 6 步的執行輸出找錯誤訊息。
 
 ## 已知限制
 
@@ -168,5 +193,6 @@ OK: repo has model_index.json, README.md, and unet/vae/text_encoder subfolders.
 - **`requirements.txt` 不裝 `peft`**：`diffusers` 匯入時會檢查已安裝的 `peft` 版本（目前
   門檻 `>=0.17.0`），版本不夠新會讓 `import diffusers` 直接失敗。訓練腳本沒有用 PEFT/LoRA，
   故不裝；如果之後改用需要 LoRA 的腳本，要另外裝 `peft>=0.17.0`。
-- **進度可見性**：`--print_loss` 是目前唯一內建的進度回報方式，且是逐步印出（無法設定間隔）。
-  訓練規模變大後，逐步印出的開銷會變得明顯，屆時需要改成每 N 步印一次。
+- **`--report_to=wandb` 只記錄 loss/learning rate 曲線，不含生成樣本圖**：diffusion 模型的
+  loss 數字不一定能直接反映生成品質，定期跑推論存生成圖比對是後續步驟才會需要的功能，目前
+  沒有實作在這支腳本裡。RAE+MeanFlow 的訓練腳本（第 3 步）設計時要一併考慮。

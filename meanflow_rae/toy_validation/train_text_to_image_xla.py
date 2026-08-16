@@ -55,7 +55,7 @@ from utils import save_model_card
 
 
 if is_wandb_available():
-    pass
+    import wandb
 
 # PROFILE_DIR / CACHE_DIR 是從環境變數讀進來的，對應 README 裡 export 的那兩個變數
 PROFILE_DIR = os.environ.get("PROFILE_DIR", None)
@@ -161,6 +161,26 @@ class TrainSD:
                     args=(
                         self.global_step,
                         loss,
+                    ),
+                )
+
+            def log_wandb_closure(step, loss, lr):
+                wandb.log({"train/loss": loss, "train/learning_rate": lr}, step=step)
+
+            if (
+                self.args.report_to == "wandb"
+                and xm.is_master_ordinal()
+                and self.global_step % self.args.logging_steps == 0
+            ):
+                # 跟上面 print_loss 一樣透過 add_step_closure 延後讀取數值，避免打斷 XLA 的
+                # 批次優化。用 logging_steps 控制頻率（而不是每步都記），是為了在正式訓練規模
+                # 變大時，把「讀 loss 數值強迫同步」這個開銷控制在可接受範圍。
+                xm.add_step_closure(
+                    log_wandb_closure,
+                    args=(
+                        self.global_step,
+                        loss,
+                        self.optimizer.param_groups[0]["lr"],
                     ),
                 )
         # TPU/XLA 特有：迴圈跑完後，用 mark_step() 明確告訴 XLA「把目前累積、還沒執行的計算圖
@@ -413,6 +433,20 @@ class TrainArgs:
     # 開啟後每一步都會印 loss，但會打斷 XLA 延遲執行的批次優化、拉慢訓練速度
     # （原因見 start_training() 裡對 xm.add_step_closure 的說明），預設關閉。
     print_loss: bool = field(default=False, metadata={"help": "Print loss at every step."})
+    report_to: Literal["none", "wandb"] = field(
+        default="none", metadata={"help": "Where to log training metrics. Supported: 'none', 'wandb'."}
+    )
+    wandb_project: str = field(
+        default="tpu-image-gen", metadata={"help": "W&B project name (only used when --report_to=wandb)."}
+    )
+    wandb_run_name: Optional[str] = field(
+        default=None, metadata={"help": "W&B run name (only used when --report_to=wandb)."}
+    )
+    # 跟 print_loss 分開控制頻率：per-step 印 loss 對這種 toy 規模還可以接受，但正式訓練規模
+    # 變大後，per-step 上傳到 W&B 的開銷會變得明顯，所以預設每 10 步才記錄一次。
+    logging_steps: int = field(
+        default=10, metadata={"help": "Log metrics to W&B every N steps (only used when --report_to=wandb)."}
+    )
 
     def __post_init__(self):
         # default to using the same revision for the non-ema model if not specified
@@ -487,6 +521,14 @@ def get_column_names(dataset, args):
 
 def main(args):
     args = parse_args()
+
+    # W&B 只在 master worker 初始化一次：所有 worker 都跑同一份程式（SPMD），
+    # 沒有這個判斷的話每台 host 都會各自開一個 run。認證靠 WANDB_API_KEY 環境變數
+    # （wandb.init() 會自動讀取），不用額外呼叫 wandb.login()。
+    if args.report_to == "wandb" and xm.is_master_ordinal():
+        if not is_wandb_available():
+            raise ImportError("--report_to=wandb requires the wandb package: pip3 install wandb")
+        wandb.init(project=args.wandb_project, name=args.wandb_run_name, config=vars(args))
 
     # TPU/XLA 特有：啟動 profiler server，之後 xp.trace_detached() 才能連上來抓 trace
     _ = xp.start_server(PORT)
@@ -699,6 +741,10 @@ def main(args):
     )
 
     trainer.start_training()
+
+    if args.report_to == "wandb" and xm.is_master_ordinal():
+        wandb.finish()
+
     # 訓練結束後把模型從 TPU 裝置搬回 CPU，才能用一般的 huggingface 方式儲存/上傳
     unet = trainer.unet.to("cpu")
     vae = trainer.vae.to("cpu")

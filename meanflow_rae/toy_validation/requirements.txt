@@ -6,3 +6,4 @@ datasets>=2.19.1
 ftfy
 tensorboard
 Jinja2
+wandb
