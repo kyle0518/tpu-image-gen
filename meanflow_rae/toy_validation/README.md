@@ -110,7 +110,18 @@ gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --command='cd ~/tpu-image-gen/meanflow_rae/toy_validation && pip3 install -r requirements.txt'
 ```
 
-（`requirements.txt` 裡已經包含 `diffusers>=0.39.0`，不用另外裝。）
+（`requirements.txt` 裡已經包含 `diffusers>=0.39.0`，不用另外裝。`peft` 不在清單裡——訓練
+腳本沒用到 PEFT/LoRA，裝了反而會踩坑，見下面「已知限制」。）
+
+如果你在這個修正之前已經跑過一次這一步，環境裡可能還留著舊版 `peft==0.7.0`（`diffusers`
+匯入時會做版本檢查，舊版會直接讓 `import diffusers` 失敗），光改 `requirements.txt` 不會
+自動移除已經裝好的版本，要手動解除安裝一次：
+
+```bash
+gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
+  --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
+  --command='pip3 uninstall -y peft'
+```
 
 ### 4. HuggingFace 認證
 
@@ -182,3 +193,8 @@ OK: repo has model_index.json, README.md, and unet/vae/text_encoder subfolders.
   的快照，不會跟著 upstream `diffusers` repo 自動更新——這是刻意的（見上面「這個資料夾裡的
   檔案」），確保這份指南長期可重跑，但代表 `diffusers` 套件本身之後若有重大變更（例如某個
   函式簽名改了），這裡不會自動跟上，需要時手動重新驗證。
+- **`requirements.txt` 不裝 `peft`**：`diffusers` 匯入時會檢查已安裝的 `peft` 版本夠不夠新
+  （目前門檻是 `>=0.17.0`），裝了不夠新的版本（例如原始參考文件那份 `requirements.txt` 釘
+  死的 `peft==0.7.0`）反而會讓 `import diffusers` 直接失敗，這是實測踩到的坑。我們的訓練
+  腳本沒有用 PEFT/LoRA，乾脆不裝，避免這個版本相容性問題；如果之後改用需要 LoRA 的腳本，
+  要另外裝夠新的版本（`peft>=0.17.0`），不能照抄原始參考文件的版本號。
