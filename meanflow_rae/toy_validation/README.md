@@ -49,10 +49,6 @@ toy dataset、TPU 上跑一輪完整流程，包含把訓練出來的東西**成
 - HuggingFace 帳號，並在 https://huggingface.co/settings/tokens 生一個 **write 權限**的
   token（要能建立 repo、上傳檔案，read-only token 不夠用）。
 
-- 你執行下面指令的機器（例如 Cloud Shell）上要有這份專案的原始碼，因為第 1 步要把
-  `toy_validation/` 這個資料夾整個傳到 TPU VM 上。如果 Cloud Shell 上還沒有這份 repo，先
-  clone/pull 一份（`git clone https://github.com/kyle0518/tpu-image-gen.git`）。
-
 - 把 `<你的GCP-project-id>`、`<你的HF帳號>`、`<你的HF write token>` 換成你自己的值——下面
   指令裡會出現，這是需要你自己填的地方。
 
@@ -71,17 +67,17 @@ export PROJECT_ID=<你的GCP-project-id>
 export ZONE=us-central2-b
 ```
 
-### 1. 把這個資料夾傳到 TPU VM 上
+### 1. 在 TPU VM 上 clone 這個 repo
 
 ```bash
-gcloud compute tpus tpu-vm scp --recurse \
-  meanflow_rae/toy_validation \
-  ${TPU_NAME}:~/toy_validation \
-  --project=${PROJECT_ID} --zone=${ZONE} --worker=all
+gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
+  --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
+  --command='git clone https://github.com/kyle0518/tpu-image-gen.git ~/tpu-image-gen'
 ```
 
-`--recurse` 把整個資料夾（含 5 個檔案）一次傳過去，`--worker=all` 確保 pod 裡每個 host 都
-拿到一份（v4-32 具體有幾個 worker 不確定，全部傳保險）。
+這個 repo 是 public，TPU VM 不用另外設定任何 GitHub 認證就能 clone。`--worker=all` 確保
+pod 裡每個 host 都 clone 一份（v4-32 具體有幾個 worker 不確定，全部 clone 保險）。這一步
+需要 TPU VM 能連到 github.com，走的是今天設定好的 Cloud NAT。
 
 ### 2. 安裝 PyTorch / PyTorch-XLA
 
@@ -111,7 +107,7 @@ gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
 ```bash
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
-  --command='cd ~/toy_validation && pip3 install -r requirements.txt'
+  --command='cd ~/tpu-image-gen/meanflow_rae/toy_validation && pip3 install -r requirements.txt'
 ```
 
 （`requirements.txt` 裡已經包含 `diffusers>=0.39.0`，不用另外裝。）
@@ -136,7 +132,7 @@ ${HF_TOKEN}` 效果一樣。
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
   --command='
-cd ~/toy_validation
+cd ~/tpu-image-gen/meanflow_rae/toy_validation
 export XLA_DISABLE_FUNCTIONALIZATION=0
 export PROFILE_DIR=/tmp/
 export CACHE_DIR=/tmp/
@@ -160,7 +156,7 @@ python3 train_text_to_image_xla.py --pretrained_model_name_or_path=stable-diffus
 ```bash
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
-  --command='cd ~/toy_validation && python3 verify_upload.py <你的HF帳號>/sd15-tpu-toy-test'
+  --command='cd ~/tpu-image-gen/meanflow_rae/toy_validation && python3 verify_upload.py <你的HF帳號>/sd15-tpu-toy-test'
 ```
 
 預期輸出最後一行是：
