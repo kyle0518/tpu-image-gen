@@ -33,6 +33,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
+import torch_xla  # 提供 torch_xla.device()，取代已棄用的 xm.xla_device()
 import torch_xla.core.xla_model as xm  # TPU/XLA 版的「裝置與同步」工具，對應 GPU 上的 torch.cuda
 import torch_xla.debug.profiler as xp  # XLA 專用的效能分析器（trace），不是 GPU 常用的 torch.profiler / Nsight
 import torch_xla.distributed.parallel_loader as pl  # 把 CPU 端的 DataLoader 包裝成會自動預先搬資料到 TPU 的版本
@@ -501,6 +502,17 @@ def main(args):
     mesh = xs.get_1d_mesh("data")
     xs.set_global_mesh(mesh)
 
+    # 混合精度設定：若指定 bf16，權重會轉成 bfloat16。提前算出來是為了在 from_pretrained() 時
+    # 直接用 torch_dtype 載入成目標精度，而不是先載成 fp32 再事後用 .to(dtype=...) 轉型——
+    # 後者會讓 diffusers 印出「應該保留 fp32 的模組」警告（訊息本身建議的正解就是這個做法）。
+    # TPU/XLA 差異：TPU 硬體原生支援 bf16 運算，且 bf16 的數值範圍跟 fp32 幾乎一樣（只是精度較低），
+    # 所以這裡不需要像 GPU 上用 fp16 混合精度訓練時那樣，額外搭配
+    # torch.cuda.amp.GradScaler 做 loss scaling 來避免數值溢位/下溢。這是 TPU 訓練程式碼
+    # 通常比 GPU fp16 版本簡單的原因之一。
+    weight_dtype = torch.float32
+    if args.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+
     # 載入預訓練模型的三大元件：text encoder（CLIP）、VAE、UNet
     # 這步驟目前都還在 CPU 上，之後才會整批搬到 TPU 裝置
     text_encoder = CLIPTextModel.from_pretrained(
@@ -508,18 +520,21 @@ def main(args):
         subfolder="text_encoder",
         revision=args.revision,
         variant=args.variant,
+        torch_dtype=weight_dtype,
     )
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
         variant=args.variant,
+        torch_dtype=weight_dtype,
     )
 
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
         revision=args.non_ema_revision,
+        torch_dtype=weight_dtype,
     )
 
     if xm.is_master_ordinal() and args.push_to_hub:
@@ -548,28 +563,16 @@ def main(args):
     text_encoder.requires_grad_(False)
     unet.train()
 
-    # For mixed precision training we cast all non-trainable weights (vae,
-    # non-lora text_encoder and non-lora unet) to half-precision
-    # as these weights are only used for inference, keeping weights in full
-    # precision is not required.
-    # 混合精度設定：若指定 bf16，權重會轉成 bfloat16。
-    # TPU/XLA 差異：TPU 硬體原生支援 bf16 運算，且 bf16 的數值範圍跟 fp32 幾乎一樣（只是精度較低），
-    # 所以這裡不需要像 GPU 上用 fp16 混合精度訓練時那樣，額外搭配
-    # torch.cuda.amp.GradScaler 做 loss scaling 來避免數值溢位/下溢。這是 TPU 訓練程式碼
-    # 通常比 GPU fp16 版本簡單的原因之一。
-    weight_dtype = torch.float32
-    if args.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
-
     # 取得 XLA 裝置控制代碼。對照 GPU 版通常寫的 torch.device("cuda")，
-    # 這裡呼叫的是 xm.xla_device()，之後所有 .to(device) 都是把 tensor/模型搬到 TPU 上。
-    device = xm.xla_device()
+    # 這裡呼叫的是 torch_xla.device()，之後所有 .to(device) 都是把 tensor/模型搬到 TPU 上。
+    device = torch_xla.device()
 
-    # Move text_encode and vae to device and cast to weight_dtype
-    # 把三個模型都搬到 TPU 裝置上，並轉成前面決定好的精度
-    text_encoder = text_encoder.to(device, dtype=weight_dtype)
-    vae = vae.to(device, dtype=weight_dtype)
-    unet = unet.to(device, dtype=weight_dtype)
+    # Move text_encode and vae to device
+    # 把三個模型都搬到 TPU 裝置上——精度已經在 from_pretrained() 用 torch_dtype 決定好了，
+    # 這裡只搬裝置，不再帶 dtype= 事後轉型
+    text_encoder = text_encoder.to(device)
+    vae = vae.to(device)
+    unet = unet.to(device)
     optimizer = setup_optimizer(unet, args)
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
