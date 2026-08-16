@@ -209,9 +209,6 @@ python tpu_provisioning/reconcile.py            # 實際刪除/補建
 python tpu_provisioning/reconcile.py --dry-run  # 只印出會做什麼，不執行
 ```
 
-完整跑一遍的實際輸出範例（含 `plan_tpu_requests.py` 印出的 14 條指令）見
-[`tpu_provisioning/example.md`](../tpu_provisioning/example.md)。
-
 ## 7. 專案目錄規劃
 
 ```

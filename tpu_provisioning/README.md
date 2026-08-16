@@ -70,8 +70,6 @@ Slice（Queued Resource）名稱格式是 `trc-{generation}-{每請求chips}-{zo
 刪的正是 create 段剛建立的同一批 slice，兩段不要連著整段貼上去跑。需要檢查現況、補建或刪除特
 定 slice 時，從對應段落複製那兩行（註解 + 指令）出來單獨跑即可。
 
-完整跑一次的實際輸出（14 條指令的具體範例）見 [`example.md`](example.md)。
-
 ## 注意事項
 
 ### 網路設定
