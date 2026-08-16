@@ -119,12 +119,15 @@ export HF_TOKEN=<你的HF write token>
 
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --project=${PROJECT_ID} --zone=${ZONE} --worker=all \
-  --command="hf auth login --token ${HF_TOKEN}"
+  --command="python3 -c \"from huggingface_hub import login; login(token='${HF_TOKEN}')\""
 ```
 
-`--token` 這個 flag 是為了非互動式登入才加的（跳過一般手動貼 token 的提示）；如果你這台
-`hf` 版本不支援 `hf auth login --token`，改用舊指令 `huggingface-cli login --token
-${HF_TOKEN}` 效果一樣。
+沒有直接用 `hf auth login`：那是 pip 裝的 console script，裝在 `~/.local/bin`，但
+`--command='...'` 這種非互動式 SSH session 預設不會把這個路徑加進 `PATH`，實測會直接
+`hf: command not found`（4 個 worker 都一樣）。改成呼叫 `huggingface_hub` 套件本身的
+`login()` function——`hf auth login` 底層就是包這個函式，效果相同，但透過 `python3 -c`
+執行完全不依賴 `PATH` 裡有沒有 console script，`huggingface_hub` 這個套件本身在步驟 3 已經
+裝好了（`diffusers`/`transformers` 的依賴），一定 import 得到。
 
 ### 5. 執行訓練，並上傳到 HuggingFace
 
