@@ -239,28 +239,24 @@ meanflow_rae/
 
 ### 1. 創建 TPU 機器
 
-目前先以「`plan_tpu_requests.py` 能產生正確指令、手動貼到 Cloud Shell 執行/檢查/刪除」為
-足夠，可以往下一步走。spot 容量本來就會波動，`reconcile.py` 這種自動偵測/補送的機制是之後
-真的需要長時間無人值守（例如 Stage 2/3 長時間訓練）時才會用到的優化，不是現在的阻塞項——
-先手動盯著、需要時手動重跑指令即可，見下面「已延後」。
+目前以「`plan_tpu_requests.py` 能產生正確指令、手動貼到 Cloud Shell 執行/檢查/刪除」為
+足夠，可以往下一步走。`reconcile.py` 的自動偵測/補送屬於之後長時間無人值守訓練才需要的
+優化，非現階段阻塞項，見下面「已延後」。
 
 - [x] TRC 配額 → `gcloud` 指令產生工具（`plan_tpu_requests.py`），含 spot 拆分邏輯
 - [x] 4 個 region（`europe-west4`、`us-east1`、`us-central1`、`us-central2`）開通
       Private Google Access（`--internal-ips` 的前置需求，見
       [`tpu_provisioning/README.md` 注意事項](../tpu_provisioning/README.md#注意事項)）
-- [x] 4 個 region 設定 Cloud NAT（TPU VM 之後要連一般網際網路下載模型/資料集才用得到）
-- [x] 至少 1 個 TPU slice 成功跑到 `ACTIVE` 狀態，驗證申請流程端到端可用——
-      `trc-v4-32-uscent2b-spot-0`、`trc-v4-32-uscent2b-on-demand-0` 已確認 `ACTIVE`
-- [x] 確認建立失敗的各種真實原因（zone 無容量、`INSTANCES` 配額瞬間衝高後又釋放、GCP 內部
-      錯誤、spot 被搶佔後進入 `SUSPENDED` 且不會自動恢復）都是預期內的容量波動，不是工具的
-      bug——`europe-west4` 的 `INSTANCES limit` 錯誤查起來 `usage=0`，推測是 14 條 create
-      幾乎同時發出瞬間衝高、失敗後又釋放，不需要額外調配額
+- [x] 4 個 region 設定 Cloud NAT
+- [x] 至少 1 個 TPU slice 成功跑到 `ACTIVE` 狀態，驗證申請流程端到端可用
+- [x] 確認建立失敗的常見原因（zone 無容量、region `INSTANCES` 配額不足、spot 被搶佔後進入
+      `SUSPENDED`）都是預期內的容量波動，非工具本身的 bug
 
 **已延後**（`reconcile.py` 程式碼已寫好，但先不驗證/排程——目前手動用 `tpu_commands.md`
 複製指令貼到 Cloud Shell 就夠用，等真的需要無人值守監控時再回來做）：
 
-- [ ] `reconcile.py` 用今天實測到的真實混合狀態（`ACTIVE`/`FAILED`/`SUSPENDED`）跑一次
-      `--dry-run`，確認判斷邏輯跟手動看到的狀態一致，再拿掉 `--dry-run` 跑一次真的執行
+- [ ] `reconcile.py` 用真實的混合狀態（`ACTIVE`/`FAILED`/`SUSPENDED`）跑一次 `--dry-run`，
+      確認判斷邏輯跟手動看到的狀態一致，再拿掉 `--dry-run` 跑一次真的執行
 - [ ] `reconcile.py` 排定期執行（cron/systemd）；跑在哪台機器仍待決（見 §10）
 
 ### 2. 在 TPU 上用 toy dataset 訓練已有架構（例如 SD1.5），並確保可以正確上傳 HuggingFace
@@ -271,11 +267,10 @@ meanflow_rae/
 
 - [x] 選一個已有實作、已知能訓練起來的架構（例如 SD1.5 fine-tune），沿用
       [`references/huggingface-pytorch-xla`](../references/huggingface-pytorch-xla) 既有腳本，
-      跑通 PyTorch/XLA + GSPMD 訓練流程——`trc-v4-32-uscent2b-on-demand-0` 上實測跑完 50 步
+      跑通 PyTorch/XLA + GSPMD 訓練流程
 - [x] TPU VM 上設好 HuggingFace 認證（token）、建立目標 repo
-- [x] 驗證 checkpoint 格式與 model card，確認能正確 push 到 HuggingFace——`verify_upload.py`
-      確認 `kyle0518/sd15-tpu-toy-test` 有完整 `model_index.json`/`README.md`/
-      `unet`/`vae`/`text_encoder` 子資料夾，4 個 worker 皆驗證通過
+- [x] 驗證 checkpoint 格式與 model card，確認能正確 push 到 HuggingFace（`verify_upload.py`
+      驗證通過）
 
 **已延後**：Spot 被搶佔中斷後從最新 checkpoint 自動接續（訓練端 checkpoint/resume，見
 §10）。這次 toy 驗證改用 on-demand TPU + 只跑 50 步（幾分鐘內結束），直接避開被搶佔的風
