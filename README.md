@@ -27,7 +27,7 @@
 .
 ├── meanflow_rae/           # 主線專案：MeanFlow + RAE 圖像生成模型
 ├── tpu_provisioning/       # TRC 配額申請 + spot 被搶佔後的自動補請求
-└── references/             # 外部參考實作（HuggingFace PyTorch/XLA 範例）
+└── references/             # 外部參考實作（HuggingFace PyTorch/XLA 範例、RAE 論文官方實作）
 ```
 
 各資料夾的用途與規劃理由見 [DECISIONS.md](DECISIONS.md)。
@@ -39,4 +39,5 @@
 | 了解 MeanFlow + RAE 的架構設計、訓練分期、roadmap | [`meanflow_rae/README.md`](meanflow_rae/README.md) |
 | 申請 TRC TPU、監控 spot 被搶佔並自動補請求 | [`tpu_provisioning/`](tpu_provisioning/README.md) |
 | 參考 TPU 建立、PyTorch/XLA 安裝、GSPMD sharding 的既有範例 | [`references/huggingface-pytorch-xla/text_to_image/README.md`](references/huggingface-pytorch-xla/text_to_image/README.md) |
+| 參考 RAE 論文官方實作（PyTorch/GPU，CC BY-NC 4.0） | [`references/RAEv2/README.md`](references/RAEv2/README.md) |
 | 了解專案結構背後的規劃理由 | [DECISIONS.md](DECISIONS.md) |

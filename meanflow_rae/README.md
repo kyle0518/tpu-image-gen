@@ -66,6 +66,9 @@ RAE encoder 全程凍結，只有 decoder 與 DiT backbone 需要訓練/微調�
 
 ### 3.1 RAE
 
+參考實作：[`references/RAEv2/`](../references/RAEv2/README.md)（RAE 論文官方 PyTorch/GPU
+實作，CC BY-NC 4.0，不能直接在 TPU 上跑，用來對照邏輯、改寫成 XLA 版本）。
+
 - **Encoder**：凍結的預訓練視覺模型（候選：DINOv2-B/L、SigLIP2），輸出 patch token 網格
   當作 latent。
 - **Decoder**：輕量 ViT 或 CNN decoder，把 encoder 的語義 latent 還原成像素。
@@ -77,6 +80,9 @@ RAE encoder 全程凍結，只有 decoder 與 DiT backbone 需要訓練/微調�
 
 - Backbone 沿用 DiT（Diffusion Transformer）架構，把時間條件 `(r, t)` 一起餵入
   （例如透過 AdaLN-Zero 兩個時間 embedding 相加/concat）。
+  - **候選變體：DDT**（見 §11 參考文獻）——把 DiT 拆成專門的 condition encoder（語意
+    抽取）與 velocity decoder（去噪），論文回報訓練收斂快約 4 倍。待評估是否跟 RAE
+    （已經把語意抽取獨立成 frozen encoder）疊加使用有沒有意義，或是重複做同一件事。
 - 訓練目標改為 MeanFlow：模型輸出 `u(z_t, r, t)`，用 MeanFlow Identity
   （對瞬時速度場做 JVP，構造出平均速度場應滿足的一致性方程）作為 loss，
   不需要額外的 teacher model 或多階段 distillation。
@@ -320,11 +326,16 @@ meanflow_rae/
 
 - **MeanFlow**：*Mean Flows for One-step Generative Modeling*（2025）—
   平均速度場 + MeanFlow Identity，訓練可一步生成的模型。
-- **RAE (Representation Autoencoder)**：以凍結預訓練語義編碼器作為 latent 空間、
-  搭配輕量 decoder 取代傳統 VAE 的做法（2025 前後相關工作）。
+- **RAE (Representation Autoencoder) / RAEv2**：*Improved Baselines with Representation
+  Autoencoders*（Singh, Zheng, Wu, Zhang, Shechtman, Xie；Adobe Research / ANU / NYU；
+  [arXiv:2605.18324](https://arxiv.org/abs/2605.18324)）—
+  以凍結預訓練語義編碼器（DINOv3 等）作為 latent 空間、搭配輕量 decoder 取代傳統 VAE。
+  官方實作見 [`references/RAEv2/`](../references/RAEv2/README.md)（CC BY-NC 4.0）。
 - **REPA**：*Representation Alignment for Generation: Training Diffusion Transformers
   Is Easier Than You Think*（Yu et al., ICLR 2025）— 在 DiT 中間層對已有 VAE latent
   做表徵對齊正則化，作為後續對照方向。
+- **DDT**：*Decoupled Diffusion Transformer*（Wang, Tian, Huang, Wang；
+  [arXiv:2504.05741](https://arxiv.org/abs/2504.05741)，CVPR 2026）— 把 DiT 拆成專門的
+  condition encoder（語意抽取）與 velocity decoder（去噪），列為 §3.2 backbone 候選之一。
 
-> 上列文獻的精確 arXiv 連結尚未在此確認，實作前建議自行查證最新版本與正確引用，
-> 避免引用到錯誤或過期的版本。
+> MeanFlow、REPA 的精確版本資訊尚未在此確認，實作前建議自行查證最新版本與正確引用。

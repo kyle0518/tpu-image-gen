@@ -7,6 +7,12 @@
 
 - `references/huggingface-pytorch-xla/` 原封不動保留、不修改——當作已驗證的
   PyTorch/XLA + GSPMD TPU 訓練參照；`meanflow_rae/` 需要類似邏輯時複製改寫，不 import。
+- `references/RAEv2/`：RAE 論文官方實作（[nanovisionx/RAEv2](https://github.com/nanovisionx/RAEv2)），
+  直接複製進來、不用 git submodule（理由跟 `huggingface-pytorch-xla` 一樣：不依賴 upstream
+  之後還在不在、有沒有改版）。**PyTorch/GPU 實作，不能直接在 TPU 上跑**，用途是給
+  `meanflow_rae/` 設計 RAE encoder/decoder 時參照邏輯、改寫成 XLA 版本。**授權是
+  CC BY-NC 4.0**（姓名標示-非商業性），比 repo 其他部分常見的授權更嚴格——非商業研究用途
+  沒問題，但不能商用，且需保留出處。
 - `tpu_provisioning/` 獨立放在根目錄：跨子專案共用，不屬於 `meanflow_rae/`；也不用 `infra/`
   包一層——目前算力來源只有 TRC 這一個，多包一層沒意義。
 - 根目錄命名 `tpu-image-gen`（不是 `meanflow-rae-tpu`）：涵蓋 `references/` 等非 MeanFlow
