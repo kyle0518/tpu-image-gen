@@ -13,6 +13,11 @@
   `meanflow_rae/` 設計 RAE encoder/decoder 時參照邏輯、改寫成 XLA 版本。**授權是
   CC BY-NC 4.0**（姓名標示-非商業性），比 repo 其他部分常見的授權更嚴格——非商業研究用途
   沒問題，但不能商用，且需保留出處。
+  - `references/RAEv2/paper/RAEv2-arxiv-2605.18324.pdf`：論文本體（*Improved Baselines with
+    Representation Autoencoders*，Singh et al.，[arXiv:2605.18324](https://arxiv.org/abs/2605.18324)），
+    直接下載進來存檔。**論文本身是 CC BY 4.0**（姓名標示）——注意這跟上面 code repo 的
+    CC BY-NC 4.0 是兩個不同授權、涵蓋兩個不同東西（論文文字 vs. 程式碼），CC BY 4.0 允許
+    重新散布，下載進公開 repo 沒有授權疑慮，只需保留出處（已在此記錄）。
 - `tpu_provisioning/` 獨立放在根目錄：跨子專案共用，不屬於 `meanflow_rae/`；也不用 `infra/`
   包一層——目前算力來源只有 TRC 這一個，多包一層沒意義。
 - 根目錄命名 `tpu-image-gen`（不是 `meanflow-rae-tpu`）：涵蓋 `references/` 等非 MeanFlow

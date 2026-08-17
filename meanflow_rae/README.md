@@ -328,9 +328,17 @@ meanflow_rae/
   平均速度場 + MeanFlow Identity，訓練可一步生成的模型。
 - **RAE (Representation Autoencoder) / RAEv2**：*Improved Baselines with Representation
   Autoencoders*（Singh, Zheng, Wu, Zhang, Shechtman, Xie；Adobe Research / ANU / NYU；
-  [arXiv:2605.18324](https://arxiv.org/abs/2605.18324)）—
+  [arXiv:2605.18324](https://arxiv.org/abs/2605.18324)，論文本體 CC BY 4.0，本機存檔見
+  [`references/RAEv2/paper/RAEv2-arxiv-2605.18324.pdf`](../references/RAEv2/paper/RAEv2-arxiv-2605.18324.pdf)）—
   以凍結預訓練語義編碼器（DINOv3 等）作為 latent 空間、搭配輕量 decoder 取代傳統 VAE。
-  官方實作見 [`references/RAEv2/`](../references/RAEv2/README.md)（CC BY-NC 4.0）。
+  官方實作見 [`references/RAEv2/`](../references/RAEv2/README.md)（**程式碼**是 CC BY-NC 4.0，
+  跟論文本體的授權不同，見 [DECISIONS.md](../DECISIONS.md)）。
+  - 另有 HuggingFace `diffusers>=0.39.0` 官方整合的
+    [`AutoencoderRAE`](https://huggingface.co/docs/diffusers/api/models/autoencoder_rae)
+    class，對應的是前身論文 RAEv1（*Diffusion Transformers with Representation
+    Autoencoders*，Zheng, Ma, Tong, Xie，arXiv:2510.11690，非同一次發布，checkpoint
+    不互通），已釋出 6 個現成 decoder checkpoint（DINOv2/SigLIP2/MAE），`toy_validation`
+    的環境已經有這個版本的 `diffusers`，可以直接拿來測 reconstruction 品質，不用自己訓。
 - **REPA**：*Representation Alignment for Generation: Training Diffusion Transformers
   Is Easier Than You Think*（Yu et al., ICLR 2025）— 在 DiT 中間層對已有 VAE latent
   做表徵對齊正則化，作為後續對照方向。
